@@ -1,36 +1,29 @@
-const grpc = require('@grpc/grpc-js');
-const protoLoader = require('@grpc/proto-loader');
+const grpc = require("@grpc/grpc-js");
 
-const targetWallet = 'YOUR_TARGET_WALLET_ADDRESS';
-const grpcUrl = 'grpc.ny.shyft.to';  // Ensure this is the correct endpoint
+const GRPC_URL = "grpc.ny.shyft.to:443"; // Ensure port 443 for secure gRPC
+const TARGET_WALLET = "YOUR_TARGET_WALLET_ADDRESS"; // Replace with target wallet
 
-// Load the .proto definition
-const packageDefinition = protoLoader.loadSync('shyft.proto', {
-    keepCase: true,
-    longs: String,
-    enums: String,
-    defaults: true,
-    oneofs: true,
-});
+// Create gRPC Client
+const client = new grpc.Client(GRPC_URL, grpc.credentials.createSsl());
 
-const shyftProto = grpc.loadPackageDefinition(packageDefinition);
-const client = new shyftProto.TransactionService(grpcUrl, grpc.credentials.createInsecure());
+// Function to fetch transactions for the wallet
+function watchTransactions() {
+    const request = { address: TARGET_WALLET }; // Request body
 
-// Function to listen to transactions
-function monitorTransactions() {
-    const stream = client.SubscribeToTransactions({ wallet: targetWallet });
-
-    stream.on('data', (tx) => {
-        console.log('New Transaction:', tx);
-    });
-
-    stream.on('error', (err) => {
-        console.error('Error:', err);
-    });
-
-    stream.on('end', () => {
-        console.log('Stream ended');
-    });
+    client.makeUnaryRequest(
+        "/shyft.v1.ShiftService/GetTransactions", // gRPC method
+        JSON.stringify, // Serialize request
+        JSON.parse, // Deserialize response
+        request,
+        (error, response) => {
+            if (error) {
+                console.error("Error fetching transactions:", error);
+            } else {
+                console.log("Transaction Data:", response);
+            }
+        }
+    );
 }
 
-monitorTransactions();
+// Start monitoring transactions
+watchTransactions();
