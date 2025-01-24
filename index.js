@@ -1,7 +1,7 @@
 const grpc = require("@grpc/grpc-js");
 
 const GRPC_URL = "grpc.ny.shyft.to:443"; // Ensure port 443 for secure gRPC
-const TARGET_WALLET = "YOUR_TARGET_WALLET_ADDRESS"; // Replace with target wallet
+const TARGET_WALLET = "6vhwrxZ3M2JNPrkaaRiYafQPJKFbBK9Ts3nGd5v8Cimy"; // Replace with target wallet
 
 // Create gRPC Client
 const client = new grpc.Client(GRPC_URL, grpc.credentials.createSsl());
