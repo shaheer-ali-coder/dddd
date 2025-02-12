@@ -181,93 +181,6 @@ async function encodeBase58(buffer) {
   
     return base58;
   }
-  async function parseTransaction(signature) {
-    try {
-        // Fetch transaction details from Solana
-        const transactionDetails = await connection.getTransaction(signature, {
-            commitment: 'confirmed',
-            encoding: 'json',
-            maxSupportedTransactionVersion: 0,
-        });
-
-        if (!transactionDetails) {
-            throw new Error('Transaction not found');
-        }
-
-        return transactionDetails;
-    } catch (error) {
-        console.error('Error parsing transaction:', error);
-        return null;
-    }
-}
-async function extractTokenTradeInfo(signature, targetOwner) {
-    const si = await parseTransaction(signature);
-    console.log(si)
-    if (!si || !si.transaction) {
-        console.log('Transaction not found or invalid.');
-        return;
-    }
-
-    const meta = si.meta;
-    if (!meta) {
-        console.log('No metadata available for transaction.');
-        return;
-    }
-
-    // Extract token mint address & token amount if target owner matches
-    const preTokenBalances = meta.preTokenBalances || [];
-    const postTokenBalances = meta.postTokenBalances || [];
-    let tokenMintAddress = null;
-    let tokenAmountChange = 0;
-    let ownerMatched = false;
-    let tradeType = 'Unknown';
-
-    preTokenBalances.forEach((preBalance) => {
-        const postBalance = postTokenBalances.find(pb => pb.accountIndex === preBalance.accountIndex);
-        if (postBalance && preBalance.owner === targetOwner) {
-            ownerMatched = true;
-            const amountBefore = parseFloat(preBalance.uiTokenAmount.uiAmountString);
-            const amountAfter = parseFloat(postBalance.uiTokenAmount.uiAmountString);
-            tokenAmountChange = amountAfter - amountBefore;
-            tokenMintAddress = preBalance.mint;
-
-            // Determine trade type
-            if (tokenAmountChange > 0) {
-                tradeType = 'Buy';
-            } else if (tokenAmountChange < 0) {
-                tradeType = 'Sell';
-            }
-        }
-    });
-
-    if (!ownerMatched) {
-        console.log('Target owner not found in this transaction.');
-        return;
-    }
-
-    // Extract SOL spent/received correctly
-    const preBalances = meta.preBalances || [];
-    const postBalances = meta.postBalances || [];
-    let solSpent = 0;
-
-    if (preBalances.length > 0 && postBalances.length > 0) {
-        solSpent = (preBalances[0] - postBalances[0] - (meta.fee || 0)) / 1e9; // Adjust for transaction fee
-    }
-
-    console.log('Target Owner:', targetOwner);
-    console.log('Token Mint Address:', tokenMintAddress);
-    console.log('Token Amount Traded:', tokenAmountChange);
-    console.log('SOL Spent:', solSpent.toFixed(6)); // Match Solscan precision
-    console.log('Trade Type:', tradeType);
-    const extraction = {
-        token: tokenMintAddress,
-        amount: solSpent.toFixed(6),
-        tradeType: tradeType
-    }
-    return extraction
-}
-
-  // Convert hex private key to a Uint8Array
 
 function hexToByteArray(hex) {
   if (hex.length % 2 !== 0) throw new Error("Invalid hex string");
@@ -372,7 +285,90 @@ const txid = await solanaTracker.performSwap(swapResponse, {
     console.error("Error performing swap:", error.message);
     return false
   }
-}async function fetchTokenPrice(tokenMintAddress) {
+}
+const parseTransaction = async (signature) => {
+  try {
+    let data = [];
+    while (!data || data.length === 0) {
+      const response = await axios.post(
+        url,
+        { transactions: [signature] },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+      data = response.data;
+    }
+
+    data.forEach((transaction) => {
+      const feePayer = transaction.feePayer;
+      let solSpent = 0;
+      let feeAmount = transaction.fee / 1_000_000_000;
+
+      if (transaction.nativeTransfers?.length > 0) {
+        transaction.nativeTransfers.forEach((transfer) => {
+          if (transfer.fromUserAccount === feePayer) {
+            solSpent += transfer.amount / 1_000_000_000;
+          }
+        });
+      }
+
+      let wsolSpent = 0;
+      if (transaction.tokenTransfers?.length > 0) {
+        transaction.tokenTransfers.forEach((transfer) => {
+          if (
+            transfer.fromUserAccount === feePayer &&
+            transfer.mint === "So11111111111111111111111111111111111111112"
+          ) {
+            wsolSpent += transfer.tokenAmount;
+          }
+        });
+      }
+
+      solSpent += wsolSpent;
+      console.log(`Raw SOL Spent (before fee subtraction): ${solSpent}`);
+      console.log(`Transaction Fee: ${feeAmount}`);
+      solSpent = Math.max(0, solSpent - feeAmount);
+      console.log(`Final SOL Spent (after fee subtraction): ${solSpent}`);
+
+      if (transaction.tokenTransfers?.length > 0) {
+        transaction.tokenTransfers.forEach((transfer) => {
+          if (transfer.mint === "So11111111111111111111111111111111111111112") {
+            return;
+          }
+
+          let tradeType = "Unknown";
+          let amountSpent = transfer.tokenAmount;
+
+          if (transfer.fromUserAccount === feePayer) {
+            tradeType = "Sell";
+          } else if (transfer.toUserAccount === feePayer) {
+            tradeType = "Buy";
+            amountSpent = solSpent;
+          }
+
+          console.log(`Token Mint Address: ${transfer.mint}`);
+          console.log(`Amount Spent: ${amountSpent.toFixed(8)}`);
+          console.log(`Trade Type: ${tradeType}`);
+          
+          return {
+            token: transfer.mint,
+            amount: amountSpent.toFixed(6),
+            tradeType: tradeType,
+          };
+        });
+      } else {
+        console.log("No token transfers found in this transaction.");
+      }
+    });
+  } catch (error) {
+    console.error(
+      "Error:",
+      error.response ? error.response.statusText : error.message
+    );
+  }
+};
+
+
+async function fetchTokenPrice(tokenMintAddress) {
   let price = null;
 
   // 1st Attempt: Fetch from DEX Screener API
@@ -467,8 +463,8 @@ async function subscribeToTransactions(account, username) {
         const startParsing = performance.now(); // Start parsing timer
 
         // console.log(signature)
-        // const parsed_transaction = await parseTransaction(signature)
-        const parsed_transaction = await extractTokenTradeInfo(signature, account[0]);
+        const parsed_transaction = await parseTransaction(signature)
+        // const parsed_transaction = await extractTokenTradeInfo(signature, account[0]);
         const endParsing = performance.now(); // End parsing timer
 
         console.log(`&&&&&&&&&&&&&&&&&&&&&&&&&& ${parsed_transaction}`)
