@@ -7,6 +7,10 @@ const fs = require('fs')
 const bot = new Telegraf('7952106783:AAH7ZM4K6YH567zjUdRkh9bGQ-jyiH1SE1U');
 const grpcClient = require("@triton-one/yellowstone-grpc");
 const axios = require('axios');
+const apiKey = 'd9d1bbd0-bc01-4388-acc8-279e6d3b9705'; // Replace with your Helius API key
+const signature = '671V6MyfzJB7TmGjHrmD8zzE2GWpCEit9F32ReURyvTEtyFQ7m1dVXF32NACbLW25hSepYXwLvrSgosbKND5C8dq';
+
+const url = `https://api.helius.xyz/v0/transactions/?api-key=${apiKey}`;
 let keye = ''
 const SOLANA_RPC_URL = 'https://rpc.shyft.to?api_key=pZ2l4uDcSENiYN1V'; // Change for devnet/testnet
 //const SOLANA_RPC_URL = 'https://mainnet.helius-rpc.com/?api-key=940baa07-0edd-4f6c-90ef-1dcfac045b1c'; // Change for devnet/testnet
