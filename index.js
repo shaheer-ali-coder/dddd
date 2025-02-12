@@ -306,15 +306,25 @@ async function buyToken(privateKeyHex, TokenMint, Amount, Gas) {
     recentBlockhash: latestBlockhash.blockhash,
     lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
   },
-  confirmationRetries: 5,  
+  confirmationRetries: 1,  
   confirmationRetryTimeout: 250,  
   lastValidBlockHeightBuffer: 20,  
   resendInterval: 500,  
   confirmationCheckInterval: 500,  
   commitment: "processed",  
-  skipConfirmationCheck: false,  
+  skipConfirmationCheck: true,  
 });
 
+    console.log("Transaction ID:", txid);
+    console.log("Transaction URL:", `https://solscan.io/tx/${txid}`);
+    return true
+   
+  } catch (error) {
+    
+    console.error("Error performing swap:", error.message);
+    return false
+  }
+}
 async function sellToken(privateKeyHex, TokenMint, Amount, Gas) {
   // Convert HEX private key to Uint8Array
   const secretKeyArray = hexToByteArray(privateKeyHex);
