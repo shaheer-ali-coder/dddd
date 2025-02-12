@@ -289,11 +289,13 @@ const txid = await solanaTracker.performSwap(swapResponse, {
     console.error("Error performing swap:", error.message);
     return false
   }
-}
+}const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const parseTransaction = async (signature) => {
   try {
     let data = [];
     while (!data || data.length === 0) {
+      await delay(100); // Adding 1-second delay before retrying
       const response = await axios.post(
         url,
         { transactions: [signature] },
@@ -370,7 +372,6 @@ const parseTransaction = async (signature) => {
     );
   }
 };
-
 
 async function fetchTokenPrice(tokenMintAddress) {
   let price = null;
